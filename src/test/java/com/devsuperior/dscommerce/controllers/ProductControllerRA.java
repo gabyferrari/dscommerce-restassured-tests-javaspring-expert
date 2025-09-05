@@ -26,6 +26,7 @@ public class ProductControllerRA {
 	private String productName;
 	
 	private Map<String, Object> postProductInstance;
+	private Map<String, Object> putProductInstance;
 	
 	@BeforeEach
 	private void setUp() {
@@ -48,6 +49,12 @@ public class ProductControllerRA {
 		postProductInstance.put("imgUrl", "https://raw.githubusercontent.com/devsuperior/dscatalog-resources/master/backend/img/1-big.jpg");
 		postProductInstance.put("price", 50.0);
 		
+		putProductInstance = new HashMap<>();
+		putProductInstance.put("name", "Produto atualizado");
+		putProductInstance.put("description", "Lorem ipsum, dolor sit amet consectetur adipisicing elit. Qui ad, adipisci illum ipsam velit et odit eaque reprehenderit ex maxime delectus dolore labore, quisquam quae tempora natus esse aliquam veniam doloremque quam minima culpa alias maiores commodi. Perferendis enim");
+		putProductInstance.put("imgUrl", "https://raw.githubusercontent.com/devsuperior/dscatalog-resources/master/backend/img/1-big.jpg");
+		putProductInstance.put("price", 200.0);
+		
 		List<Map<String, Object>> categories = new ArrayList<>();
 		
 		Map<String, Object> category1 = new HashMap<>();
@@ -60,6 +67,7 @@ public class ProductControllerRA {
 		categories.add(category2);
 		
 		postProductInstance.put("categories", categories);
+		putProductInstance.put("categories", categories);
 	}
 	
 	@Test
@@ -265,6 +273,195 @@ public class ProductControllerRA {
 			.accept(ContentType.JSON)
 				.when()
 					.post("/products")
+						.then()
+							.statusCode(401);
+	}
+	
+	@Test
+	public void updateShouldReturnProductWhenIdExistsAndAdminLogged() {
+		existingId = 10L;
+		
+		JSONObject newProduct = new JSONObject(putProductInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + adminToken)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+			.body(newProduct)
+				.when()
+					.put("/products/{id}", existingId)
+						.then()
+							.statusCode(200)
+							.body("name", equalTo("Produto atualizado"))
+							.body("price", is(200.0f))
+							.body("imgUrl", equalTo("https://raw.githubusercontent.com/devsuperior/dscatalog-resources/master/backend/img/1-big.jpg"))
+							.body("categories.id", hasItems(2, 3))
+							.body("categories.name", hasItems("Eletrônicos", "Computadores"));
+	}
+	
+	@Test
+	public void updateShouldReturnNotFoundWhenIdDoesNotExistAndAdminLogged() {
+		nonExistingId = 100L;
+		
+		JSONObject newProduct = new JSONObject(putProductInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + adminToken)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+			.body(newProduct)
+				.when()
+					.put("/products/{id}", nonExistingId)
+						.then()
+							.statusCode(404)
+							.body("status", equalTo(404))
+							.body("error", equalTo("Recurso não encontrado"));
+	}
+	
+	@Test
+	public void updateShouldReturnUnprocessableEntityWhenIdExistsAndAdminLoggedAndInvalidName() {
+		putProductInstance.put("name", "Pr");
+		
+		existingId = 10L;
+		
+		JSONObject newProduct = new JSONObject(putProductInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + adminToken)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+			.body(newProduct)
+				.when()
+					.put("/products/{id}", existingId)
+						.then()
+							.statusCode(422)
+							.body("status", equalTo(422))
+							.body("errors.message[0]", equalTo("Nome precisar ter de 3 a 80 caracteres"));
+	}
+	
+	@Test
+	public void updateShouldReturnUnprocessableEntityWhenIdExistsAndAdminLoggedAndInvalidDescription() {
+		putProductInstance.put("description", "Lorem");
+		
+		existingId = 10L;
+		
+		JSONObject newProduct = new JSONObject(putProductInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + adminToken)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+			.body(newProduct)
+				.when()
+					.put("/products/{id}", existingId)
+						.then()
+							.statusCode(422)
+							.body("status", equalTo(422))
+							.body("errors.message[0]", equalTo("Descrição precisa ter no mínimo 10 caracteres"));
+	}
+	
+	@Test
+	public void updateShouldReturnUnprocessableEntityWhenIdExistsAndAdminLoggedAndPriceIsNegative() {
+		putProductInstance.put("price", -200.0);
+		
+		existingId = 10L;
+		
+		JSONObject newProduct = new JSONObject(putProductInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + adminToken)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+			.body(newProduct)
+				.when()
+					.put("/products/{id}", existingId)
+						.then()
+							.statusCode(422)
+							.body("status", equalTo(422))
+							.body("errors.message[0]", equalTo("O preço deve ser positivo"));
+	}
+	
+	@Test
+	public void updateShouldReturnUnprocessableEntityWhenIdExistsAndAdminLoggedAndPriceIsZero() {
+		putProductInstance.put("price", 0.0);
+		
+		existingId = 10L;
+		
+		JSONObject newProduct = new JSONObject(putProductInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + adminToken)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+			.body(newProduct)
+				.when()
+					.put("/products/{id}", existingId)
+						.then()
+							.statusCode(422)
+							.body("status", equalTo(422))
+							.body("errors.message[0]", equalTo("O preço deve ser positivo"));
+	}
+	
+	@Test
+	public void updateShouldReturnUnprocessableEntityWhenIdExistsAndAdminLoggedAndProductHasNoCategory() {
+		putProductInstance.put("categories", null);
+		
+		existingId = 10L;
+		
+		JSONObject newProduct = new JSONObject(putProductInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + adminToken)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+			.body(newProduct)
+				.when()
+					.put("/products/{id}", existingId)
+						.then()
+							.statusCode(422)
+							.body("status", equalTo(422))
+							.body("errors.message[0]", equalTo("Deve ter pelo menos uma categoria"));
+	}
+	
+	@Test
+	public void updateShouldReturnForbiddenWhenIdExistsAndClientLogged() {
+		existingId = 10L;
+		
+		JSONObject newProduct = new JSONObject(putProductInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + clientToken)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+			.body(newProduct)
+				.when()
+					.put("/products/{id}", existingId)
+						.then()
+							.statusCode(403);
+	}
+	
+	@Test
+	public void updateShouldReturnUnauthorizedWhenIdExistsAndInvalidToken() {
+		existingId = 10L;
+		
+		JSONObject newProduct = new JSONObject(putProductInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + invalidToken)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+			.body(newProduct)
+				.when()
+					.put("/products/{id}", existingId)
 						.then()
 							.statusCode(401);
 	}
