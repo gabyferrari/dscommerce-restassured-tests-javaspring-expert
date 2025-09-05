@@ -22,7 +22,7 @@ public class ProductControllerRA {
 	private String adminUsername, adminPassword, clientUsername, clientPassword;
 	private String adminToken, clientToken, invalidToken;
 	
-	private Long existingId, nonExistingId;
+	private Long existingId, nonExistingId, dependentId;
 	private String productName;
 	
 	private Map<String, Object> postProductInstance;
@@ -254,6 +254,70 @@ public class ProductControllerRA {
 			.accept(ContentType.JSON)
 				.when()
 					.post("/products")
+						.then()
+							.statusCode(401);
+	}
+	
+	@Test
+	public void deleteShouldReturnNoContentWhenAdminLogged() {
+		existingId = 25L;
+		
+		given()
+			.header("Authorization", "Bearer " + adminToken)
+				.when()
+					.delete("/products/{id}", existingId)
+						.then()
+							.statusCode(204);
+	}
+
+	@Test
+	public void deleteShouldReturnNotFoundWhenAdminLoggedAndNonExistingId() {
+		nonExistingId = 100L;
+		
+		given()
+			.header("Authorization", "Bearer " + adminToken)
+				.when()
+					.delete("/products/{id}", nonExistingId)
+						.then()
+							.statusCode(404)
+							.body("status", equalTo(404))
+							.body("error", equalTo("Recurso não encontrado"));
+	}
+	
+	@Test
+	public void deleteShouldReturnBadRequestWhenAdminLoggedAndDependentId() {
+		dependentId = 3L;
+		
+		given()
+			.header("Authorization", "Bearer " + adminToken)
+				.when()
+					.delete("/products/{id}", dependentId)
+						.then()
+							.statusCode(400)
+							.body("status", equalTo(400))
+							.body("error", equalTo("Falha de integridade referencial"));
+	}
+	
+	@Test
+	public void deleteShouldReturnForbiddenWhenClientLogged() {
+		existingId = 24L;
+		
+		given()
+			.header("Authorization", "Bearer " + clientToken)
+				.when()
+					.delete("/products/{id}", existingId)
+						.then()
+							.statusCode(403);
+	}
+	
+	@Test
+	public void deleteShouldReturnUnauthorizedWhenInvalidToken() {
+		existingId = 24L;
+		
+		given()
+			.header("Authorization", "Bearer " + invalidToken)
+				.when()
+					.delete("/products/{id}", existingId)
 						.then()
 							.statusCode(401);
 	}
