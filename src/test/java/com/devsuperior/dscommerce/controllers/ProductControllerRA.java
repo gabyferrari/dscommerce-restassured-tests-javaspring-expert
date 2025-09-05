@@ -79,6 +79,17 @@ public class ProductControllerRA {
 	}
 	
 	@Test
+	public void findByIdShouldReturnNotFoundWhenIdDoesNotExist() {
+		nonExistingId = 100L;
+		
+		given()
+			.get("/products/{id}", nonExistingId)
+			.then()
+				.statusCode(404)
+				.body("error", equalTo("Recurso não encontrado"));
+	}
+	
+	@Test
 	public void findAllShouldReturnPageProductsWhenProductNameIsEmpty() {
 		
 		given()
