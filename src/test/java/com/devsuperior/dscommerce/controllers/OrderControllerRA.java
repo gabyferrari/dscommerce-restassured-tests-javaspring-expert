@@ -19,10 +19,12 @@ import io.restassured.http.ContentType;
 
 public class OrderControllerRA {
 	
-	private String adminUsername, adminPassword, clientUsername, clientPassword;
-	private String adminToken, clientToken, invalidToken;
+	private String adminUsername, adminPassword, adminOnlyUsername, adminOnlyPassword, clientUsername, clientPassword;
+	private String adminToken, clientToken, adminOnlyToken, invalidToken;
 	
 	private Long existingId, nonExistingId, otherId;
+	
+	private Map<String, List<Map<String, Object>>> postOrderInstance;
 	
 	@BeforeEach
 	private void setUp() {
@@ -34,12 +36,30 @@ public class OrderControllerRA {
 
 		adminUsername = "alex@gmail.com";
 		adminPassword = "123456";
+		adminOnlyUsername = "ana@gmail.com";
+		adminOnlyPassword = "123456";
 		clientUsername = "maria@gmail.com";
 		clientPassword = "123456";
 		
 		adminToken = TokenUtil.obtainAccessToken(adminUsername, adminPassword);
+		adminOnlyToken = TokenUtil.obtainAccessToken(adminOnlyUsername, adminOnlyPassword);
 		clientToken = TokenUtil.obtainAccessToken(clientUsername, clientPassword);
 		invalidToken = adminToken + "xpto";
+		
+		Map<String, Object> item1 = new HashMap<>();
+		item1.put("productId", 1);
+		item1.put("quantity", 2);
+		
+		Map<String, Object> item2 = new HashMap<>();
+		item2.put("productId", 5);
+		item2.put("quantity", 1);
+		
+		List<Map<String,Object>> itemInstances = new ArrayList<>();
+		itemInstances.add(item1);
+		itemInstances.add(item2);
+		
+		postOrderInstance = new HashMap<>();
+		postOrderInstance.put("items", itemInstances);
 	}
 	
 	@Test
@@ -136,6 +156,79 @@ public class OrderControllerRA {
 		.then()
 			.statusCode(401);
 	}
+	
+	@Test
+	public void insertShouldReturnOrderCreatedWhenClientLogged() {
+		
+		JSONObject newOrder = new JSONObject(postOrderInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + clientToken)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+			.body(newOrder)
+		.when()
+			.post("/orders")
+		.then()
+			.statusCode(201)
+			.body("status", equalTo("WAITING_PAYMENT"))
+			.body("client.name", equalTo("Maria Brown"))
+			.body("items.name", hasItems("The Lord of the Rings", "Rails for Dummies"))
+			.body("total", is(281.99F));
+	}
 
+	@Test
+	public void insertShouldReturnUnprocessableEntityWhenClientLoggedAndOrderHasNoItem() {
+		postOrderInstance.put("items", null);
+		
+		JSONObject newOrder = new JSONObject(postOrderInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + clientToken)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+			.body(newOrder)
+		.when()
+			.post("/orders")
+		.then()
+			.statusCode(422)
+			.body("errors.message[0]", equalTo("Deve ter pelo menos um item"));
+	}
+	
+	@Test
+	public void insertShouldReturnForbiddenWhenAdminLogged() {
+		
+		JSONObject newOrder = new JSONObject(postOrderInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + adminOnlyToken)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+			.body(newOrder)
+		.when()
+			.post("/orders")
+		.then()
+			.statusCode(403);
+	}
+	
+	@Test
+	public void insertShouldReturnUnauthorizedWhenInvalidToken() {
+		
+		JSONObject newOrder = new JSONObject(postOrderInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + invalidToken)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+			.body(newOrder)
+		.when()
+			.post("/orders")
+		.then()
+			.statusCode(401);
+	}
 
 }
