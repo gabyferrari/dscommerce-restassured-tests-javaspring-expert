@@ -4,19 +4,62 @@ import static io.restassured.RestAssured.*;
 import static io.restassured.matcher.RestAssuredMatchers.*;
 import static org.hamcrest.Matchers.*;
 
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
+import org.json.simple.JSONObject;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import com.devsuperior.dscommerce.tests.TokenUtil;
+
+import io.restassured.http.ContentType;
+
 public class ProductControllerRA {
+	
+	private String adminUsername, adminPassword, clientUsername, clientPassword;
+	private String adminToken, clientToken, invalidToken;
 	
 	private Long existingId, nonExistingId;
 	private String productName;
+	
+	private Map<String, Object> postProductInstance;
 	
 	@BeforeEach
 	private void setUp() {
 		baseURI = "http://localhost:8080"; //endereço da api que eu quero testar os endpoints, seria o projeto dscommerce-jacoco-tests
 
+		adminUsername = "alex@gmail.com";
+		adminPassword = "123456";
+		clientUsername = "maria@gmail.com";
+		clientPassword = "123456";
+		
+		adminToken = TokenUtil.obtainAccessToken(adminUsername, adminPassword);
+		clientToken = TokenUtil.obtainAccessToken(clientUsername, clientPassword);
+		invalidToken = adminToken + "xpto";
+		
 		productName = "Macbook";
+		
+		postProductInstance = new HashMap<>();
+		postProductInstance.put("name", "Meu produto novo");
+		postProductInstance.put("description", "Lorem ipsum, dolor sit amet consectetur adipisicing elit. Qui ad, adipisci illum ipsam velit et odit eaque reprehenderit ex maxime delectus dolore labore, quisquam quae tempora natus esse aliquam veniam doloremque quam minima culpa alias maiores commodi. Perferendis enim");
+		postProductInstance.put("imgUrl", "https://raw.githubusercontent.com/devsuperior/dscatalog-resources/master/backend/img/1-big.jpg");
+		postProductInstance.put("price", 50.0);
+		
+		List<Map<String, Object>> categories = new ArrayList<>();
+		
+		Map<String, Object> category1 = new HashMap<>();
+		category1.put("id", 2);
+		
+		Map<String, Object> category2 = new HashMap<>();
+		category2.put("id", 3);
+		
+		categories.add(category1);
+		categories.add(category2);
+		
+		postProductInstance.put("categories", categories);
 	}
 	
 	@Test
@@ -66,6 +109,153 @@ public class ProductControllerRA {
 			.then()
 				.statusCode(200)
 				.body("content.findAll { it.price > 2000 }.name ", hasItems("Smart TV", "PC Gamer Weed"));
+	}
+	
+	@Test
+	public void insertShouldReturnProductCreatedWhenAdminLogged() {
+		JSONObject newProduct = new JSONObject(postProductInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + adminToken)
+			.body(newProduct)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+				.when()
+					.post("/products")
+						.then()
+							.statusCode(201)
+							.body("name", equalTo("Meu produto novo"))
+							.body("price", is(50.0F))
+							.body("imgUrl", equalTo("https://raw.githubusercontent.com/devsuperior/dscatalog-resources/master/backend/img/1-big.jpg"))
+							.body("categories.id", hasItems(2, 3));
+	}
+	
+	@Test
+	public void insertShouldReturnUnprocessableEntityWhenAdminLoggedAndInvalidName() {
+		postProductInstance.put("name", "Me");
+		
+		JSONObject newProduct = new JSONObject(postProductInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + adminToken)
+			.body(newProduct)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+				.when()
+					.post("/products")
+						.then()
+							.statusCode(422)
+							.body("errors.message[0]", equalTo("Nome precisar ter de 3 a 80 caracteres"));
+	}
+	
+	@Test
+	public void insertShouldReturnUnprocessableEntityWhenAdminLoggedAndInvalidDescription() {
+		postProductInstance.put("description", "Lorem");
+		
+		JSONObject newProduct = new JSONObject(postProductInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + adminToken)
+			.body(newProduct)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+				.when()
+					.post("/products")
+						.then()
+							.statusCode(422)
+							.body("errors.message[0]", equalTo("Descrição precisa ter no mínimo 10 caracteres"));
+	}
+	
+	@Test
+	public void insertShouldReturnUnprocessableEntityWhenAdminLoggedAndPriceIsNegative() {
+		postProductInstance.put("price", -50.0);
+		
+		JSONObject newProduct = new JSONObject(postProductInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + adminToken)
+			.body(newProduct)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+				.when()
+					.post("/products")
+						.then()
+							.statusCode(422)
+							.body("errors.message[0]", equalTo("O preço deve ser positivo"));
+	}
+	
+	@Test
+	public void insertShouldReturnUnprocessableEntityWhenAdminLoggedAndPriceIsZero() {
+		postProductInstance.put("price", 0.0);
+		
+		JSONObject newProduct = new JSONObject(postProductInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + adminToken)
+			.body(newProduct)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+				.when()
+					.post("/products")
+						.then()
+							.statusCode(422)
+							.body("errors.message[0]", equalTo("O preço deve ser positivo"));
+	}
+	
+	@Test
+	public void insertShouldReturnUnprocessableEntityWhenAdminLoggedAndProductHasNoCategory() {
+		postProductInstance.put("categories", null);
+		
+		JSONObject newProduct = new JSONObject(postProductInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + adminToken)
+			.body(newProduct)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+				.when()
+					.post("/products")
+						.then()
+							.statusCode(422)
+							.body("errors.message[0]", equalTo("Deve ter pelo menos uma categoria"));
+	}
+	
+	@Test
+	public void insertShouldReturnForbiddenWhenClientLogged() {
+		JSONObject newProduct = new JSONObject(postProductInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + clientToken)
+			.body(newProduct)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+				.when()
+					.post("/products")
+						.then()
+							.statusCode(403);
+	}
+	
+	@Test
+	public void insertShouldReturnUnauthorizedWhenInvalidToken() {
+		JSONObject newProduct = new JSONObject(postProductInstance);
+		
+		given()
+			.header("Content-type", "application/json")
+			.header("Authorization", "Bearer " + invalidToken)
+			.body(newProduct)
+			.contentType(ContentType.JSON)
+			.accept(ContentType.JSON)
+				.when()
+					.post("/products")
+						.then()
+							.statusCode(401);
 	}
 
 }
